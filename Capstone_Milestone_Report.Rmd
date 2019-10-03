@@ -1,0 +1,283 @@
+---
+title: "Data Science Capstone Assignment 1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_knit$set(root.dir = getwd())
+require("knitr")
+opts_knit$set(root.dir = "C:/Users/doris.jacobs/Documents/Programs/R/Coursera/10_Data_Scientist_Capstone/Capstone/Data")
+```
+
+
+* 23-9-2019
+
+## Summary
+
+This report is about the first assignment of the Capstone Project for the Coursera Data Science Specialization by John’s Hopkin’s University and Swiftkeys. This Capstone project applies data science in the area of natural language processing. It summarizes the frequencies of words in a text. The text was compiled from a blog, news and twitter text. Three frequencies were calculated, namely a unigram (n=1), bigram (n=2) and trigram (n=3). (A bigrams is a sequence of two adjacent elements from a string of tokens, which are typically letters, syllables, or words. A bigram is an n-gram for n=2)
+
+## Getting Data
+
+The data is from a corpus called HC Corpora. the files named LOCALE.blogs.txt where LOCALE is the each of the four locales en_US, de_DE, ru_RU and fi_FI. Here, we focus on en_US only. The en_US folder includes a blog, news and twitter text. The files have been language filtered but may still contain some foreign text.
+
+
+
+```{r message=FALSE}
+# load packages
+library(tm) 
+# Read the blogs and Twitter data into R
+
+Blogs <- readLines("./final/en_US/en_US.blogs.txt", encoding = "UTF-8", skipNul = TRUE)
+News <- readLines("./final/en_US/en_US.news.txt", encoding = "UTF-8", skipNul = TRUE)
+Twitter <- readLines("./final/en_US/en_US.twitter.txt", encoding = "UTF-8", skipNul = TRUE)
+```
+
+## Summary of data
+
+The size of the file, the line numbers and the number of words were determined for each blog, news and twitter text 
+
+```{r message=FALSE}
+
+# get file size
+sizeBlogs <- file.info("./final/en_US/en_US.blogs.txt")$size / 1024 ^ 2
+sizeNews <- file.info("./final/en_US/en_US.news.txt")$size / 1024 ^ 2
+sizeTwitter <- file.info("./final/en_US/en_US.twitter.txt")$size / 1024 ^ 2
+
+# Count number of words
+library(ngram)
+wordsBlogs<-wordcount(Blogs, sep = " ", count.function = sum)
+wordsNews<-wordcount(News, sep = " ", count.function = sum)
+wordsTwitter<-wordcount(Twitter, sep = " ", count.function = sum)
+
+
+# make table with file characteristics 
+data.frame(file_name =c("Blogs", "News", "Twitter"),
+           file_size =c(sizeBlogs, sizeNews, sizeTwitter),
+           number_rows = c(length(Blogs), length(News), length(Twitter)),
+           number_words = c(wordsBlogs, wordsNews, wordsTwitter))
+
+```
+
+## Compile a reduced dataset
+
+To reduce computational time, 1% of the data were randomly selected from bnews and twitter text,respectively. Only 0.1 % of the data was randomly selected from the blog text
+
+
+```{r message=FALSE}
+library(tm)
+# Sample the data
+set.seed(1234)
+sampleBlog <- sample(Blogs, length(Blogs) * 0.001)
+sampleNews <- sample(News, length(News) * 0.01)
+sampleTwitter <- sample(Twitter, length(Twitter) * 0.01)
+```
+
+## Data cleaning
+
+The three text files were transferred to a Corpus (see tm package) and cleaned:  
+- all links (e.g. http) were converted to space;  
+- all characters were converted to lowercase;    
+- Whitespace (extra spaces in the text), punctuations and numbers were removed;  
+- finally, the text was converted to plain text.  
+
+
+```{r message=FALSE}
+# Create corpus and clean the Blog data
+corBlog <- VCorpus(VectorSource(sampleBlog))
+toSpace <- content_transformer(function(x, pattern) gsub(pattern, " ", x))
+corBlog <- tm_map(corBlog, toSpace, "(f|ht)tp(s?)://(.*)[.][a-z]+")
+corBlog <- tm_map(corBlog, toSpace, "@[^\\s]+")
+corBlog <- tm_map(corBlog, tolower)
+corBlog <- tm_map(corBlog, removeWords, stopwords("en"))
+corBlog <- tm_map(corBlog, removePunctuation)
+corBlog <- tm_map(corBlog, removeNumbers)
+corBlog <- tm_map(corBlog, stripWhitespace)
+corBlog <- tm_map(corBlog, PlainTextDocument)
+```
+
+
+```{r message=FALSE}
+# Create corpus and clean the News data
+corNews <- VCorpus(VectorSource(sampleNews))
+toSpace <- content_transformer(function(x, pattern) gsub(pattern, " ", x))
+corNews <- tm_map(corNews, toSpace, "(f|ht)tp(s?)://(.*)[.][a-z]+")
+corNews <- tm_map(corNews, toSpace, "@[^\\s]+")
+corNews <- tm_map(corNews, tolower)
+corNews <- tm_map(corNews, removeWords, stopwords("en"))
+corNews <- tm_map(corNews, removePunctuation)
+corNews <- tm_map(corNews, removeNumbers)
+corNews <- tm_map(corNews, stripWhitespace)
+corNews <- tm_map(corNews, PlainTextDocument)
+```
+
+
+```{r message=FALSE}
+# Create corpus and clean the Twitter data
+corTwitter <- VCorpus(VectorSource(sampleTwitter))
+toSpace <- content_transformer(function(x, pattern) gsub(pattern, " ", x))
+corTwitter <- tm_map(corTwitter, toSpace, "(f|ht)tp(s?)://(.*)[.][a-z]+")
+corTwitter <- tm_map(corTwitter, toSpace, "@[^\\s]+")
+corTwitter <- tm_map(corTwitter, tolower)
+corTwitter <- tm_map(corTwitter, removeWords, stopwords("en"))
+corTwitter <- tm_map(corTwitter, removePunctuation)
+corTwitter <- tm_map(corTwitter, removeNumbers)
+corTwitter <- tm_map(corTwitter, stripWhitespace)
+corTwitter <- tm_map(corTwitter, PlainTextDocument)
+```
+
+
+## Calculate the frequency
+
+The frequency of the words using Unigram, Bigram and Trigrams were calculated for Blog, News and Twitter, respectively.
+
+```{r message=FALSE}
+library(RWeka)
+options(mc.cores=1)
+# Unigram
+tdmUniBlog <- removeSparseTerms(TermDocumentMatrix(corBlog), 0.9999)
+freqUniBlog <- rowSums(as.matrix(tdmUniBlog))
+freqUniBlog <- sort(freqUniBlog, decreasing=TRUE)
+freqUniBlog <- data.frame(word=names(freqUniBlog), freq=freqUniBlog)
+
+
+tdmUniNews <- removeSparseTerms(TermDocumentMatrix(corNews), 0.9999)
+freqUniNews <- rowSums(as.matrix(tdmUniNews))
+freqUniNews <- sort(freqUniNews, decreasing=TRUE)
+freqUniNews <- data.frame(word=names(freqUniNews), freq=freqUniNews)
+
+
+tdmUniTwitter <- removeSparseTerms(TermDocumentMatrix(corTwitter), 0.9999)
+freqUniTwitter <- rowSums(as.matrix(tdmUniTwitter))
+freqUniTwitter <- sort(freqUniTwitter, decreasing=TRUE)
+freqUniTwitter <- data.frame(word=names(freqUniTwitter), freq=freqUniTwitter)
+
+
+# Bigram
+bigram <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
+tdmBiBlog <- removeSparseTerms(TermDocumentMatrix(corBlog, control = list(tokenize = bigram)), 0.9999)
+freqBiBlog <- rowSums(as.matrix(tdmBiBlog))
+freqBiBlog <- sort(freqBiBlog, decreasing=TRUE)
+freqBiBlog <- data.frame(word=names(freqBiBlog), freq=freqBiBlog)
+
+bigram <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
+tdmBiNews <- removeSparseTerms(TermDocumentMatrix(corNews, control = list(tokenize = bigram)), 0.9999)
+freqBiNews <- rowSums(as.matrix(tdmBiNews))
+freqBiNews <- sort(freqBiNews, decreasing=TRUE)
+freqBiNews <- data.frame(word=names(freqBiNews), freq=freqBiNews)
+
+bigram <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
+tdmBiTwitter <- removeSparseTerms(TermDocumentMatrix(corTwitter, control = list(tokenize = bigram)), 0.9999)
+freqBiTwitter <- rowSums(as.matrix(tdmBiTwitter))
+freqBiTwitter <- sort(freqBiTwitter, decreasing=TRUE)
+freqBiTwitter <- data.frame(word=names(freqBiTwitter), freq=freqBiTwitter)
+
+
+# Trigram
+trigram <- function(x) NGramTokenizer(x, Weka_control(min = 3, max = 3))
+tdmTriBlog <- removeSparseTerms(TermDocumentMatrix(corBlog, control = list(tokenize = trigram)), 0.9999)
+freqTriBlog <- rowSums(as.matrix(tdmTriBlog))
+freqTriBlog <- sort(freqTriBlog, decreasing=TRUE)
+freqTriBlog <- data.frame(word=names(freqTriBlog), freq=freqTriBlog)
+
+trigram <- function(x) NGramTokenizer(x, Weka_control(min = 3, max = 3))
+tdmTriNews <- removeSparseTerms(TermDocumentMatrix(corNews, control = list(tokenize = trigram)), 0.9999)
+freqTriNews <- rowSums(as.matrix(tdmTriNews))
+freqTriNews <- sort(freqTriNews, decreasing=TRUE)
+freqTriNews <- data.frame(word=names(freqTriNews), freq=freqTriNews)
+
+trigram <- function(x) NGramTokenizer(x, Weka_control(min = 3, max = 3))
+tdmTriTwitter <- removeSparseTerms(TermDocumentMatrix(corTwitter, control = list(tokenize = trigram)), 0.9999)
+freqTriTwitter <- rowSums(as.matrix(tdmTriTwitter))
+freqTriTwitter <- sort(freqTriTwitter, decreasing=TRUE)
+freqTriTwitter <- data.frame(word=names(freqTriTwitter), freq=freqTriTwitter)
+
+
+```
+
+## Histograms of 20 most frequent Unigrams in Blog, News and Twitter
+
+
+```{r message=FALSE}
+library(ggplot2)
+library(cowplot)
+
+# Unigram
+
+plotBlogUni <- ggplot(freqUniBlog[1:20,], aes(reorder(word, freq), freq)) +
+         labs(x="Words", y = "Frequency") + ggtitle("Blog") +
+         theme(axis.text.x = element_text(size = 12, hjust = 1)) +
+         geom_bar(stat = "identity", fill = I("blue")) + coord_flip()
+
+plotNewsUni <- ggplot(freqUniNews[1:20,], aes(reorder(word, freq), freq)) +
+         labs(x="Words", y = "Frequency") + ggtitle("News") +
+         theme(axis.text.x = element_text(size = 12, hjust = 1)) +
+         geom_bar(stat = "identity", fill = I("red")) + coord_flip()
+
+plotTwitterUni <- ggplot(freqUniTwitter[1:20,], aes(reorder(word, freq), freq)) +
+         labs(x="Words", y = "Frequency") + ggtitle("Twitter") +
+         theme(axis.text.x = element_text(size = 12, hjust = 1)) +
+         geom_bar(stat = "identity", fill = I("green")) + coord_flip()
+
+
+cowplot::plot_grid(plotBlogUni, plotNewsUni, plotTwitterUni, nrow= 1, labels = "AUTO")
+
+```
+
+## Histograms of 20 most frequent Bigrams in Blog, News and Twitter
+
+
+```{r message=FALSE}
+library(ggplot2)
+library(cowplot)
+#Bigram
+plotBlogBi <- ggplot(freqBiBlog[1:20,], aes(reorder(word, freq), freq)) +
+         labs(x="Words", y = "Frequency") + ggtitle("Blog") +
+         theme(axis.text.x = element_text(size = 12, hjust = 1)) +
+         geom_bar(stat = "identity", fill = I("blue")) + coord_flip()
+
+plotNewsBi <- ggplot(freqBiNews[1:20,], aes(reorder(word, freq), freq)) +
+         labs(x="Words", y = "Frequency") + ggtitle("News") +
+         theme(axis.text.x = element_text(size = 12, hjust = 1)) +
+         geom_bar(stat = "identity", fill = I("red")) + coord_flip()
+
+plotTwitterBi <- ggplot(freqBiTwitter[1:20,], aes(reorder(word, freq), freq)) +
+         labs(x="Words", y = "Frequency") + ggtitle("Twitter") +
+         theme(axis.text.x = element_text(size = 12, hjust = 1)) +
+         geom_bar(stat = "identity", fill = I("green")) + coord_flip()
+
+
+cowplot::plot_grid(plotBlogBi, plotNewsBi, plotTwitterBi, nrow= 1, labels = "AUTO")
+
+```
+
+## Histograms of 20 most frequent Trigrams in Blog, News and Twitter
+
+```{r message=FALSE}
+#Trigram
+
+plotBlogTri <- ggplot(freqTriBlog[1:20,], aes(reorder(word, freq), freq)) +
+         labs(x="Words", y = "Frequency") + ggtitle("Blog") +
+         theme(axis.text.x = element_text(size = 10, hjust = 1)) +
+         geom_bar(stat = "identity", fill = I("blue")) + coord_flip()
+
+plotNewsTri <- ggplot(freqTriNews[1:20,], aes(reorder(word, freq), freq)) +
+         labs(x="Words", y = "Frequency") + ggtitle("News") +
+         theme(axis.text.x = element_text(size = 10, hjust = 1)) +
+         geom_bar(stat = "identity", fill = I("red")) + coord_flip()
+
+plotTwitterTri <- ggplot(freqTriTwitter[1:20,], aes(reorder(word, freq), freq)) +
+         labs(x="Words", y = "Frequency") + ggtitle("Twitter") +
+         theme(axis.text.x = element_text(size = 10, hjust = 1)) +
+         geom_bar(stat = "identity", fill = I("green")) + coord_flip()
+
+
+cowplot::plot_grid(plotBlogTri, plotNewsTri, plotTwitterTri, nrow= 1, labels = "AUTO")
+
+
+```
+
+## Conclusions and next steps
+
+The histograms show the differences in the frequencies of words in Blog, News and Twitter, respecptively, using Unigrams, Bigrams and Trigrams. This information will be used to develop a SHiNY app, that allows for predicting the following word(s).
+
